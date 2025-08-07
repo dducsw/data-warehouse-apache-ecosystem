@@ -1,10 +1,52 @@
 from pyspark.sql import SparkSession
 from datetime import datetime
 import sys
+import psycopg2
+import uuid
 
-def extract():
-    print("== Starting PostgreSQL to Bronze Layer... ==")
+def log_job_to_postgres(job_name, start_time, end_time, record_count, status, error_message=None):
+    conn = psycopg2.connect(
+        dbname="crm_erp", user="postgres", password="6666", host="localhost", port=5432
+    )
+    cur = conn.cursor()
+    log_id = str(uuid.uuid4())
+    run_date = start_time.date()
+    created_date = datetime.now()
+    cur.execute("""
+        INSERT INTO job_log (
+            log_id, job_name, run_date, start_time, end_time, record_count, status, error_message, created_date
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (log_id, job_name, run_date, start_time, end_time, record_count, status, error_message, created_date))
+    conn.commit()
+    cur.close()
+    conn.close()
 
+def config_job_to_postgres(job_name, source_schema, source_table, source_db_type, source_ip,
+                           destination_schema, destination_table, destination_db_type, destination_ip,
+                           load_type, schedule_type, is_active):
+    conn = psycopg2.connect(
+        dbname="crm_erp", user="postgres", password="6666", host="localhost", port=5432
+    )
+    cur = conn.cursor()
+    config_id = str(uuid.uuid4())
+    created_date = datetime.now()
+    cur.execute("""
+        INSERT INTO job_config (
+            config_id, job_name, source_schema, source_table, source_db_type, source_ip,
+            destination_schema, destination_table, destination_db_type, destination_ip,
+            load_type, schedule_type, is_active, created_date
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        config_id, job_name, source_schema, source_table, source_db_type, source_ip,
+        destination_schema, destination_table, destination_db_type, destination_ip,
+        load_type, schedule_type, is_active, created_date
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def extract(mode="full"):
+    print(f"== Starting PostgreSQL to Bronze Layer ({mode})... ==")
     try:
         spark = SparkSession.builder \
             .appName("Extract Postgres DB to Bronze Layer") \
@@ -15,7 +57,6 @@ def extract():
             .config("spark.sql.hive.metastore.jars", "/usr/local/hive/lib/*") \
             .config("spark.jars", "/usr/local/spark/jars/postgresql-42.7.7.jar") \
             .getOrCreate()
-
         spark.sparkContext.setLogLevel("WARN")
 
         postgres_url = "jdbc:postgresql://localhost:5432/crm_erp"
@@ -38,17 +79,55 @@ def extract():
         total_rows, success_count, error_count = 0, 0, 0
 
         for src_table, tgt_table in table_mappings:
-            print(f"\n== Loading {src_table} → {tgt_table} ...")
+            print(f"\n== Loading {src_table} -> {tgt_table} ...")
+            job_start = datetime.now()
+            job_name = f"extract_{src_table}_to_{tgt_table}"
             try:
-                df = spark.read.jdbc(postgres_url, src_table, properties=props)
+                # Log job config before extraction
+                config_job_to_postgres(
+                    job_name=job_name,
+                    source_schema="public",
+                    source_table=src_table,
+                    source_db_type="postgres",
+                    source_ip="localhost",
+                    destination_schema="bronze",
+                    destination_table=tgt_table.split(".")[1],
+                    destination_db_type="hive",
+                    destination_ip="localhost",
+                    load_type=mode,
+                    schedule_type="manual",
+                    is_active=True
+                )
+
+                if mode == "increment":
+                    query = f"(SELECT * FROM {src_table} WHERE src_update_at > (NOW() - INTERVAL '1 day')) AS tmp"
+                    df = spark.read.jdbc(postgres_url, query, properties=props)
+                else:
+                    df = spark.read.jdbc(postgres_url, src_table, properties=props)
                 row_count = df.count()
-                df.write.mode("overwrite").saveAsTable(tgt_table)
+                df.write.mode("overwrite" if mode == "full" else "append").saveAsTable(tgt_table)
                 print(f"== Loaded {row_count} rows")
                 total_rows += row_count
                 success_count += 1
+                log_job_to_postgres(
+                    job_name=job_name,
+                    start_time=job_start,
+                    end_time=datetime.now(),
+                    record_count=row_count,
+                    status="success",
+                    error_message=None
+                )
             except Exception as e:
                 print(f"== Failed to load {src_table}: {e}")
                 error_count += 1
+                log_job_to_postgres(
+                    job_name=job_name,
+                    start_time=job_start,
+                    end_time=datetime.now(),
+                    record_count=0,
+                    status="failed",
+                    error_message=str(e)
+                )
 
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n=== ETL Summary: ===")
@@ -64,4 +143,5 @@ def extract():
         spark.stop()
 
 if __name__ == "__main__":
-    extract()
+    mode = sys.argv[1] if len(sys.argv) > 1 else "full"
+    extract(mode)

@@ -14,7 +14,8 @@ CREATE TABLE crm_cust_info (
     cst_lastname       VARCHAR(100),
     cst_marital_status VARCHAR(50),
     cst_gndr           VARCHAR(10),
-    cst_create_date    DATE
+    cst_create_date    DATE,
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop and recreate CRM product info table
@@ -27,7 +28,8 @@ CREATE TABLE crm_prd_info (
     prd_cost        VARCHAR(100),    
     prd_line        VARCHAR(100),
     prd_start_dt    TIMESTAMP,
-    prd_end_dt      TIMESTAMP
+    prd_end_dt      TIMESTAMP,
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop and recreate CRM sales details table
@@ -42,7 +44,8 @@ CREATE TABLE crm_sales_details (
     sls_due_dt      INTEGER,     
     sls_sales       INTEGER,
     sls_quantity    INTEGER,
-    sls_price       INTEGER
+    sls_price       INTEGER,
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop and recreate ERP location table
@@ -50,7 +53,8 @@ DROP TABLE IF EXISTS erp_loc_a101;
 
 CREATE TABLE erp_loc_a101 (
     cid             VARCHAR(100),
-    cntry           VARCHAR(100)
+    cntry           VARCHAR(100),
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop and recreate ERP customer table
@@ -59,7 +63,8 @@ DROP TABLE IF EXISTS erp_cust_az12;
 CREATE TABLE erp_cust_az12 (
     cid             VARCHAR(50),
     bdate           DATE,
-    gen             VARCHAR(50)
+    gen             VARCHAR(50),
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop and recreate ERP product category table
@@ -69,17 +74,10 @@ CREATE TABLE erp_px_cat_g1v2 (
     id              VARCHAR(50),
     cat             VARCHAR(50),
     subcat          VARCHAR(50),
-    maintenance     VARCHAR(50)
+    maintenance     VARCHAR(50),
+    src_update_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create ETL Info Database
-CREATE DATABASE etl_info;
-
--- Connect to etl_info database
-\c etl_info;
-
--- ETL Job Configuration Table
-DROP TABLE IF EXISTS job_config;
 
 CREATE TABLE job_config (
     config_id           VARCHAR(100),
