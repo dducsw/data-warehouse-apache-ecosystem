@@ -1,19 +1,3 @@
-/*
-===============================================================================
-DDL Script: Create Gold Schema Tables
-===============================================================================
-Script Purpose:
-    This script creates tables for the Gold layer in the data warehouse. 
-    The Gold layer represents the final dimension and fact tables (Star Schema)
-
-    Each table contains materialized, clean, enriched, and business-ready dataset.
-
-Usage:
-    - These tables can be queried directly for analytics and reporting.
-    - Data will be populated via ETL process from Silver layer
-===============================================================================
-*/
-
 -- Create Gold Database
 CREATE DATABASE IF NOT EXISTS gold
 COMMENT 'Gold Schema - Dimensional Model';
@@ -21,113 +5,73 @@ COMMENT 'Gold Schema - Dimensional Model';
 USE gold;
 
 -- =============================================================================
--- Create Dimension: gold.dim_customers
+-- Create View: gold.dim_customers
 -- =============================================================================
-DROP TABLE IF EXISTS dim_customers;
+DROP VIEW IF EXISTS gold.dim_customers;
 
-CREATE TABLE dim_customers (
-    customer_key        BIGINT,         -- Surrogate key
-    customer_id         INT,            -- Business key
-    customer_number     STRING,         -- Customer number from source
-    first_name          STRING,
-    last_name           STRING,
-    country             STRING,
-    marital_status      STRING,
-    gender              STRING,
-    birthdate           DATE,
-    create_date         DATE,
-)
-STORED AS PARQUET
-TBLPROPERTIES (
-    'layer'='gold',
-    'table_type'='dimension',
-    'business_area'='customer'
-);
-
--- =============================================================================
--- Create Dimension: gold.dim_products
--- =============================================================================
-DROP TABLE IF EXISTS dim_products;
-
-CREATE TABLE dim_products (
-    product_key         BIGINT,         -- Surrogate key
-    product_id          INT,            -- Business key
-    product_number      STRING,         -- Product number from source
-    product_name        STRING,
-    category_id         STRING,
-    category_name       STRING,
-    subcategory_name    STRING,
-    maintenance_flag    STRING,
-    cost                DECIMAL(10,2),
-    product_line        STRING,
-    start_date          DATE,
-    end_date            DATE,
-)
-STORED AS PARQUET
-TBLPROPERTIES (
-    'layer'='gold',
-    'table_type'='dimension',
-    'business_area'='product'
-);
+CREATE VIEW gold.dim_customers AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY ci.cst_id) AS customer_key, -- Surrogate key
+    ci.cst_id                          AS customer_id,
+    ci.cst_key                         AS customer_number,
+    ci.cst_firstname                   AS first_name,
+    ci.cst_lastname                    AS last_name,
+    la.cntry                           AS country,
+    ci.cst_marital_status              AS marital_status,
+    CASE 
+        WHEN ci.cst_gndr != 'n/a' THEN ci.cst_gndr
+        ELSE COALESCE(ca.gen, 'n/a')
+    END                                AS gender,
+    ca.bdate                           AS birthdate,
+    ci.cst_create_date                 AS create_date
+FROM silver.crm_cust_info ci
+LEFT JOIN silver.erp_cust_az12 ca
+    ON ci.cst_key = ca.cid
+LEFT JOIN silver.erp_loc_a101 la
+    ON ci.cst_key = la.cid;
 
 -- =============================================================================
--- Create Dimension: gold.dim_product_categories
+-- Create View: gold.dim_products
 -- =============================================================================
-DROP TABLE IF EXISTS dim_product_categories;
+DROP VIEW IF EXISTS gold.dim_products;
 
-CREATE TABLE dim_product_categories (
-    category_key        BIGINT,         -- Surrogate key
-    category_id         STRING,         -- Business key
-    category_name       STRING,
-    subcategory_name    STRING,
-    maintenance_flag    STRING,
-    dwh_create_date     TIMESTAMP,
-    dwh_update_date     TIMESTAMP
-)
-STORED AS PARQUET
-TBLPROPERTIES (
-    'layer'='gold',
-    'table_type'='dimension',
-    'business_area'='product'
-);
-
-
+CREATE VIEW gold.dim_products AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt, pn.prd_key) AS product_key, -- Surrogate key
+    pn.prd_id       AS product_id,
+    pn.prd_key      AS product_number,
+    pn.prd_nm       AS product_name,
+    pn.cat_id       AS category_id,
+    pc.cat          AS category_name,
+    pc.subcat       AS subcategory_name,
+    pc.maintenance  AS maintenance_flag,
+    pn.prd_cost     AS cost,
+    pn.prd_line     AS product_line,
+    pn.prd_start_dt AS start_date,
+    pn.prd_end_dt   AS end_date
+FROM silver.crm_prd_info pn
+LEFT JOIN silver.erp_px_cat_g1v2 pc
+    ON pn.cat_id = pc.id
+WHERE pn.prd_end_dt IS NULL;
 
 -- =============================================================================
--- Create Fact Table: gold.fact_sales
+-- Create View: gold.fact_sales
 -- =============================================================================
-DROP TABLE IF EXISTS fact_sales;
+DROP VIEW IF EXISTS gold.fact_sales;
 
-CREATE TABLE fact_sales (
-    -- Keys
-    sales_key           BIGINT,         -- Surrogate key
-    order_number        STRING,         -- Business key
-    product_key         BIGINT,         -- FK to dim_products
-    customer_key        BIGINT,         -- FK to dim_customers
-    
-    -- Dates
-    order_date          DATE,
-    shipping_date       DATE,
-    due_date            DATE,
-    
-    -- Measures
-    sales_amount        INT,
-    quantity            INT,
-    unit_price          INT,
-    total_sales         DECIMAL(15,2),  -- Calculated field
-    cost_amount         DECIMAL(15,2),  -- Calculated field
-    profit_amount       DECIMAL(15,2),  -- Calculated field
-    profit_margin_pct   DECIMAL(5,2),   -- Calculated field
-    
-    
-    -- Audit
-    dwh_create_date     TIMESTAMP,
-    dwh_update_date     TIMESTAMP
-)
-STORED AS PARQUET
-TBLPROPERTIES (
-    'layer'='gold',
-    'table_type'='fact',
-    'business_area'='sales'
-);
-
+CREATE VIEW gold.fact_sales AS
+SELECT
+    sd.sls_ord_num      AS order_number,
+    pr.product_key      AS product_key,
+    cu.customer_key     AS customer_key,
+    sd.sls_order_dt     AS order_date,
+    sd.sls_ship_dt      AS shipping_date,
+    sd.sls_due_dt       AS due_date,
+    sd.sls_sales        AS sales_amount,
+    sd.sls_quantity     AS quantity,
+    sd.sls_price        AS unit_price
+FROM silver.crm_sales_details sd
+LEFT JOIN gold.dim_products pr
+    ON sd.sls_prd_key = pr.product_number
+LEFT JOIN gold.dim_customers cu
+    ON sd.sls_cust_id = cu.customer_id;

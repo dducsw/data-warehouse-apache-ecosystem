@@ -1,3 +1,4 @@
+import os
 from pyspark.sql import SparkSession
 
 def create_tables():
@@ -12,9 +13,17 @@ def create_tables():
         .enableHiveSupport() \
         .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
+    
     try:
-        with open('create-gold-schema.hql', 'r') as file:
+        # Get the directory where this script is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        hql_file_path = os.path.join(script_dir, 'create-gold-schema.hql')
+        
+        print(f"Looking for HQL file at: {hql_file_path}")
+            
+        with open(hql_file_path, 'r') as file:
             statements = [stmt.strip() for stmt in file.read().split(';') if stmt.strip() and not stmt.strip().startswith('--')]
+        
         success_count = error_count = 0
         for i, statement in enumerate(statements, 1):
             print(f"\n[{i}/{len(statements)}] Executing: {statement[:200]}...")
@@ -25,8 +34,10 @@ def create_tables():
             except Exception as e:
                 print(f"-- Error: {str(e)}")
                 error_count += 1
-        print(f"== success_count: {success_count}, error_count: {error_count} ==")
+        print(f"\n== Results: success_count: {success_count}, error_count: {error_count} ==")
 
+    except Exception as e:
+        print(f"-- Fatal error: {e}")
     finally:
         print("== Stopping Spark session...")
         spark.stop()

@@ -1,8 +1,8 @@
 -- Create crm_erp database
-CREATE DATABASE IF NOT EXISTS crm_erp;
+CREATE DATABASE crm_erp;
 
 -- Connect to crm_erp database
-\c crm_erp;
+\connect crm_erp;
 
 -- Drop and recreate CRM customer info table
 DROP TABLE IF EXISTS crm_cust_info;
@@ -70,4 +70,45 @@ CREATE TABLE erp_px_cat_g1v2 (
     cat             VARCHAR(50),
     subcat          VARCHAR(50),
     maintenance     VARCHAR(50)
+);
+
+-- Create ETL Info Database
+CREATE DATABASE etl_info;
+
+-- Connect to etl_info database
+\c etl_info;
+
+-- ETL Job Configuration Table
+DROP TABLE IF EXISTS job_config;
+
+CREATE TABLE job_config (
+    config_id           VARCHAR(100),
+    job_name            VARCHAR(100),
+    source_schema       VARCHAR(100),
+    source_table        VARCHAR(100),
+    source_db_type      VARCHAR(100),
+    source_ip           VARCHAR(100),
+    destination_schema  VARCHAR(100),
+    destination_table   VARCHAR(100),
+    destination_db_type VARCHAR(100),
+    destination_ip      VARCHAR(100),
+    load_type           INTEGER,        -- 0: full, 1: incremental
+    schedule_type       VARCHAR(100),
+    is_active           INTEGER,
+    created_date        TIMESTAMP
+);
+
+-- ETL Job Log Table
+DROP TABLE IF EXISTS job_log;
+
+CREATE TABLE job_log (
+    log_id              VARCHAR(100),
+    job_name            VARCHAR(100),
+    run_date            DATE,
+    start_time          TIMESTAMP,
+    end_time            TIMESTAMP,
+    record_count        BIGINT,
+    status              VARCHAR(50),     -- RUNNING, SUCCESS, FAILED
+    error_message       VARCHAR(255),
+    created_date        TIMESTAMP
 );
