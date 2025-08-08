@@ -11,7 +11,8 @@ CREATE TABLE bronze.crm_cust_info (
     cst_lastname STRING,
     cst_marital_status STRING,
     cst_gndr STRING,
-    cst_create_date DATE
+    cst_create_date DATE,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (
@@ -30,7 +31,8 @@ CREATE TABLE bronze.crm_prd_info (
     prd_cost STRING,
     prd_line STRING,
     prd_start_dt TIMESTAMP,
-    prd_end_dt TIMESTAMP
+    prd_end_dt TIMESTAMP,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (
@@ -51,7 +53,8 @@ CREATE TABLE bronze.crm_sales_details (
     sls_due_dt INT,
     sls_sales INT,
     sls_quantity INT,
-    sls_price INT
+    sls_price INT,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (
@@ -65,7 +68,8 @@ TBLPROPERTIES (
 DROP TABLE IF EXISTS bronze.erp_loc_a101;
 CREATE TABLE bronze.erp_loc_a101 (
     cid STRING,
-    cntry STRING
+    cntry STRING,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (
@@ -80,7 +84,8 @@ DROP TABLE IF EXISTS bronze.erp_cust_az12;
 CREATE TABLE bronze.erp_cust_az12 (
     cid STRING,
     bdate DATE,
-    gen STRING
+    gen STRING,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (
@@ -96,7 +101,8 @@ CREATE TABLE bronze.erp_px_cat_g1v2 (
     id STRING,
     cat STRING,
     subcat STRING,
-    maintenance STRING
+    maintenance STRING,
+    src_update_at TIMESTAMP
 )
 STORED AS PARQUET
 TBLPROPERTIES (

@@ -16,14 +16,16 @@ def transform_crm_cust_info():
             .config("hive.metastore.uris", "thrift://localhost:9083") \
             .enableHiveSupport() \
             .getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("ERROR")
 
     try:
         print("Start transform crm_sales_details")
         
         batch_start_time = datetime.now()
 
-        df = spark.table("bronze.crm_sales_details")
+        df = spark.table("bronze.crm_sales_details") \
+            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        
         out = df.select(
             col("sls_ord_num"),
             col("sls_prd_key"),
@@ -45,8 +47,9 @@ def transform_crm_cust_info():
         )
         out.write.mode("overwrite").saveAsTable("silver.crm_sales_details")
 
+        number_record = out.count()
         duration = (datetime.now() - batch_start_time).total_seconds()
-        print(f"== Silver Layer Loaded in {duration:.0f} seconds")
+        print(f"== Silver Layer Loaded {number_record} records in {duration:.0f} seconds")
     except Exception as e:
         print(f" ETL error: {e}")
         sys.exit(1)

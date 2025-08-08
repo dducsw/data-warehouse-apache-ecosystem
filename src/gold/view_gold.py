@@ -13,7 +13,7 @@ def view_gold_layer():
         .config("hive.metastore.uris", "thrift://localhost:9083") \
         .enableHiveSupport() \
         .getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("ERROR")
 
     try:
         print("=== gold.dim_customers ===")

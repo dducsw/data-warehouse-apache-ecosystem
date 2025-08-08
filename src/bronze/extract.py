@@ -1,52 +1,60 @@
 from pyspark.sql import SparkSession
 from datetime import datetime
 import sys
-import psycopg2
 import uuid
 
-def log_job_to_postgres(job_name, start_time, end_time, record_count, status, error_message=None):
-    conn = psycopg2.connect(
-        dbname="crm_erp", user="postgres", password="6666", host="localhost", port=5432
-    )
-    cur = conn.cursor()
+def log_job_to_postgres(spark, job_name, start_time, end_time, record_count, status, error_message=None):
     log_id = str(uuid.uuid4())
     run_date = start_time.date()
     created_date = datetime.now()
-    cur.execute("""
-        INSERT INTO job_log (
-            log_id, job_name, run_date, start_time, end_time, record_count, status, error_message, created_date
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (log_id, job_name, run_date, start_time, end_time, record_count, status, error_message, created_date))
-    conn.commit()
-    cur.close()
-    conn.close()
+    job_name = job_name[:255]
+    error_message = error_message[:255] if error_message is not None else None
+    data = [(log_id, job_name, run_date, start_time, end_time, record_count, status, error_message, created_date)]
+    columns = [
+        "log_id", "job_name", "run_date", "start_time", "end_time", "record_count",
+        "status", "error_message", "created_date"
+    ]
+    df = spark.createDataFrame(data, columns)
+    df.write \
+      .format("jdbc") \
+      .option("url", "jdbc:postgresql://localhost:5432/crm_erp") \
+      .option("dbtable", "job_log") \
+      .option("user", "postgres") \
+      .option("password", "6666") \
+      .option("driver", "org.postgresql.Driver") \
+      .mode("append") \
+      .save()
 
-def config_job_to_postgres(job_name, source_schema, source_table, source_db_type, source_ip,
+def config_job_to_postgres(spark, job_name, source_schema, source_table, source_db_type, source_ip,
                            destination_schema, destination_table, destination_db_type, destination_ip,
                            load_type, schedule_type, is_active):
-    conn = psycopg2.connect(
-        dbname="crm_erp", user="postgres", password="6666", host="localhost", port=5432
-    )
-    cur = conn.cursor()
     config_id = str(uuid.uuid4())
     created_date = datetime.now()
-    cur.execute("""
-        INSERT INTO job_config (
-            config_id, job_name, source_schema, source_table, source_db_type, source_ip,
-            destination_schema, destination_table, destination_db_type, destination_ip,
-            load_type, schedule_type, is_active, created_date
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (
-        config_id, job_name, source_schema, source_table, source_db_type, source_ip,
-        destination_schema, destination_table, destination_db_type, destination_ip,
-        load_type, schedule_type, is_active, created_date
-    ))
-    conn.commit()
-    cur.close()
-    conn.close()
+    load_type = 0 if load_type == "full" else 1
+    job_name = job_name[:255]
+
+    data = [(config_id, job_name, source_schema, source_table, source_db_type, source_ip,
+             destination_schema, destination_table, destination_db_type, destination_ip,
+             load_type, schedule_type, is_active, created_date)]
+    columns = [
+        "config_id", "job_name", "source_schema", "source_table", "source_db_type", "source_ip",
+        "destination_schema", "destination_table", "destination_db_type", "destination_ip",
+        "load_type", "schedule_type", "is_active", "created_date"
+    ]
+    df = spark.createDataFrame(data, columns)
+    df.write \
+      .format("jdbc") \
+      .option("url", "jdbc:postgresql://localhost:5432/crm_erp") \
+      .option("dbtable", "job_config") \
+      .option("user", "postgres") \
+      .option("password", "6666") \
+      .option("driver", "org.postgresql.Driver") \
+      .mode("append") \
+      .save()
 
 def extract(mode="full"):
     print(f"== Starting PostgreSQL to Bronze Layer ({mode})... ==")
+    spark = None
     try:
         spark = SparkSession.builder \
             .appName("Extract Postgres DB to Bronze Layer") \
@@ -57,7 +65,7 @@ def extract(mode="full"):
             .config("spark.sql.hive.metastore.jars", "/usr/local/hive/lib/*") \
             .config("spark.jars", "/usr/local/spark/jars/postgresql-42.7.7.jar") \
             .getOrCreate()
-        spark.sparkContext.setLogLevel("WARN")
+        spark.sparkContext.setLogLevel("ERROR")
 
         postgres_url = "jdbc:postgresql://localhost:5432/crm_erp"
         props = {
@@ -85,6 +93,7 @@ def extract(mode="full"):
             try:
                 # Log job config before extraction
                 config_job_to_postgres(
+                    spark,
                     job_name=job_name,
                     source_schema="public",
                     source_table=src_table,
@@ -96,7 +105,7 @@ def extract(mode="full"):
                     destination_ip="localhost",
                     load_type=mode,
                     schedule_type="manual",
-                    is_active=True
+                    is_active=1
                 )
 
                 if mode == "increment":
@@ -110,6 +119,7 @@ def extract(mode="full"):
                 total_rows += row_count
                 success_count += 1
                 log_job_to_postgres(
+                    spark,
                     job_name=job_name,
                     start_time=job_start,
                     end_time=datetime.now(),
@@ -121,6 +131,7 @@ def extract(mode="full"):
                 print(f"== Failed to load {src_table}: {e}")
                 error_count += 1
                 log_job_to_postgres(
+                    spark,
                     job_name=job_name,
                     start_time=job_start,
                     end_time=datetime.now(),
@@ -140,7 +151,8 @@ def extract(mode="full"):
         print(f"== Critical ETL error: {e}")
         sys.exit(1)
     finally:
-        spark.stop()
+        if spark:
+            spark.stop()
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "full"
