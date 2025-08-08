@@ -23,16 +23,25 @@ def transform_crm_cust_info():
         
         batch_start_time = datetime.now()
 
+        # Read data from the bronze layer table, filtering for records updated in the last day
         df = spark.table("bronze.erp_cust_az12") \
             .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+
+        # Transform columns:
+        # - 'cid': Remove 'NAS' prefix if present
+        # - 'bdate': Set to None if birthdate is in the future, otherwise cast to date
+        # - 'gen': Normalize gender values to 'Female', 'Male', or 'n/a'
+        # - 'dwh_create_date': Add current timestamp for data warehouse creation date
         out = df.select(
             when(col("cid").startswith("NAS"), substring(col("cid"), 4, 100)).otherwise(col("cid")).alias("cid"),
             when(col("bdate") > current_date(), None).otherwise(col("bdate")).cast("date").alias("bdate"),
             when(upper(trim(col("gen"))).isin("F", "FEMALE"), "Female")
-                .when(upper(trim(col("gen"))).isin("M", "MALE"), "Male")
-                .otherwise("n/a").alias("gen"),
+            .when(upper(trim(col("gen"))).isin("M", "MALE"), "Male")
+            .otherwise("n/a").alias("gen"),
             current_timestamp().alias("dwh_create_date")
         )
+
+        # Write the transformed data to the silver layer table, overwriting existing data
         out.write.mode("overwrite").saveAsTable("silver.erp_cust_az12")
 
         number_record = out.count()

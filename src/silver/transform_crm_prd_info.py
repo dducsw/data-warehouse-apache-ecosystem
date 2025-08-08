@@ -23,26 +23,46 @@ def transform_crm_prd_info():
         
         batch_start_time = datetime.now()
 
+        # Read data from bronze layer, filtering for records updated in the last day
         df = spark.table("bronze.crm_prd_info") \
             .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
         
+        # Define window specification for partitioning by product key and ordering by start date
         w = Window.partitionBy("prd_key").orderBy("prd_start_dt")
+        
+        # Transform columns and apply business logic for silver layer
         out = df.withColumn("original_prd_key", col("prd_key")) \
             .select(
-                col("prd_id").cast("int"),
-                regexp_replace(substring(col("original_prd_key"), 1, 5), "-", "_").alias("cat_id"),
-                when(length(col("original_prd_key")) > 6, substring(col("original_prd_key"), 7, 100))
-                    .otherwise(col("original_prd_key")).alias("prd_key"),
-                col("prd_nm"),
-                coalesce(col("prd_cost"), lit(0)).cast("decimal(10,2)").alias("prd_cost"),
-                when(upper(trim(col("prd_line"))) == "M", "Mountain")
-                    .when(upper(trim(col("prd_line"))) == "R", "Road")
-                    .when(upper(trim(col("prd_line"))) == "S", "Other Sales")
-                    .when(upper(trim(col("prd_line"))) == "T", "Touring")
-                    .otherwise("n/a").alias("prd_line"),
-                col("prd_start_dt").cast("date"),
-                (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
-                current_timestamp().alias("dwh_create_date")
+            # Cast product ID to integer
+            col("prd_id").cast("int"),
+
+            # Extract and format category ID from product key
+            regexp_replace(substring(col("original_prd_key"), 1, 5), "-", "_").alias("cat_id"),
+
+            # Extract product key, handling cases where length > 6
+            when(length(col("original_prd_key")) > 6, substring(col("original_prd_key"), 7, 100))
+                .otherwise(col("original_prd_key")).alias("prd_key"),
+
+            col("prd_nm"),
+
+            # Ensure product cost is not null and cast to decimal
+            coalesce(col("prd_cost"), lit(0)).cast("decimal(10,2)").alias("prd_cost"),
+
+            # Map product line codes to descriptive names
+            when(upper(trim(col("prd_line"))) == "M", "Mountain")
+                .when(upper(trim(col("prd_line"))) == "R", "Road")
+                .when(upper(trim(col("prd_line"))) == "S", "Other Sales")
+                .when(upper(trim(col("prd_line"))) == "T", "Touring")
+                .otherwise("n/a").alias("prd_line"),
+
+            # Cast product start date to date type
+            col("prd_start_dt").cast("date"),
+
+            # Calculate product end date as one day before the next start date in the window
+            (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
+            
+            # Add ETL load timestamp
+            current_timestamp().alias("dwh_create_date")
             )
         out.write.mode("overwrite").saveAsTable("silver.crm_prd_info")
 

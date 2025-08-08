@@ -23,26 +23,31 @@ def transform_crm_cust_info():
         
         batch_start_time = datetime.now()
 
+        # Read source table from bronze layer and filter for records updated in the last day
         df = spark.table("bronze.crm_cust_info") \
             .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
-        
+
+        # Define window to select the latest record per customer based on create date
         w = Window.partitionBy("cst_id").orderBy(desc("cst_create_date"))
+
+        # Filter out records with null customer ID, select latest record per customer,
+        # and standardize key fields (marital status, gender, names)
         out = df.filter(col("cst_id").isNotNull()) \
             .withColumn("flag_last", row_number().over(w)) \
             .filter(col("flag_last") == 1) \
             .select(
-                col("cst_id").cast("int"),
-                col("cst_key"),
-                trim(col("cst_firstname")).alias("cst_firstname"),
-                trim(col("cst_lastname")).alias("cst_lastname"),
-                when(upper(trim(col("cst_marital_status"))) == "S", "Single")
-                    .when(upper(trim(col("cst_marital_status"))) == "M", "Married")
-                    .otherwise("n/a").alias("cst_marital_status"),
-                when(upper(trim(col("cst_gndr"))) == "F", "Female")
-                    .when(upper(trim(col("cst_gndr"))) == "M", "Male")
-                    .otherwise("n/a").alias("cst_gndr"),
-                col("cst_create_date").cast("date"),
-                current_timestamp().alias("dwh_create_date")
+            col("cst_id").cast("int"),  # Cast customer ID to integer
+            col("cst_key"),
+            trim(col("cst_firstname")).alias("cst_firstname"),  # Remove whitespace from first name
+            trim(col("cst_lastname")).alias("cst_lastname"),    # Remove whitespace from last name
+            when(upper(trim(col("cst_marital_status"))) == "S", "Single") # Standardize marital status: S->Single, M->Married, else n/a
+                .when(upper(trim(col("cst_marital_status"))) == "M", "Married")
+                .otherwise("n/a").alias("cst_marital_status"),
+            when(upper(trim(col("cst_gndr"))) == "F", "Female") # Standardize gender: F->Female, M->Male, else n/a
+                .when(upper(trim(col("cst_gndr"))) == "M", "Male")
+                .otherwise("n/a").alias("cst_gndr"),
+            col("cst_create_date").cast("date"),  # Cast create date to date type
+            current_timestamp().alias("dwh_create_date")  # Add ETL load timestamp
             )
 
         out.write.mode("overwrite").saveAsTable("silver.crm_cust_info")
