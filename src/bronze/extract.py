@@ -54,6 +54,7 @@ def config_job_to_postgres(spark, job_name, source_schema, source_table, source_
 
 def extract():
     print(f"== Starting PostgreSQL to Bronze Layer ... ==")
+    load_mode = None
     spark = None
     try:
         spark = SparkSession.builder \
@@ -96,9 +97,11 @@ def extract():
                 exist_count = df_exist.count()
 
                 if exist_count == 0:
-                    mode = "full"
+                    load_mode = "full"
+                    print("== FULL LOAD ==")
                 else:
-                    mode = "increment"
+                    load_mode = "increment"
+                    print("INCREMENT LOAD ==")
 
                 config_job_to_postgres(
                     spark,
@@ -111,18 +114,18 @@ def extract():
                     destination_table=tgt_table.split(".")[1],
                     destination_db_type="hive",
                     destination_ip="localhost",
-                    load_type=mode,
+                    load_type=load_mode,
                     schedule_type="manual",
                     is_active=1
                 )
 
-                if mode == "increment":
+                if load_mode == "increment":
                     query = f"(SELECT * FROM {src_table} WHERE src_update_at > (NOW() - INTERVAL '1 day')) AS tmp"
                     df = spark.read.jdbc(postgres_url, query, properties=props)
                 else:
                     df = spark.read.jdbc(postgres_url, src_table, properties=props)
                 row_count = df.count()
-                df.write.mode("overwrite" if mode == "full" else "append").saveAsTable(tgt_table)
+                df.write.mode("overwrite" if load_mode == "full" else "append").saveAsTable(tgt_table)
                 print(f"== Loaded {row_count} rows")
                 total_rows += row_count
                 success_count += 1

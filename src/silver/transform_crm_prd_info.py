@@ -58,8 +58,8 @@ def transform_crm_prd_info():
             col("prd_start_dt").cast("date"),
 
             # # Calculate product end date as one day before the next start date in the window
-            # (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
-            col("prd_end_dt").cast("date"),
+             (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
+            # col("prd_end_dt").cast("date"),
             # Add ETL load timestamp
             current_timestamp().alias("dwh_create_date")
             ).dropDuplicates(["prd_id"])
