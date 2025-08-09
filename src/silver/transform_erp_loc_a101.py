@@ -24,8 +24,7 @@ def transform_crm_cust_info():
         batch_start_time = datetime.now()
 
         # Read source table from bronze layer and filter for records updated in the last day
-        df = spark.table("bronze.erp_loc_a101") \
-            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        df = spark.table("bronze.erp_loc_a101")
 
         # Standardize country field and customer ID, add ETL load timestamp
         out = df.select(
@@ -35,7 +34,7 @@ def transform_crm_cust_info():
             .when((trim(col("cntry")) == "") | col("cntry").isNull(), "n/a")
             .otherwise(trim(col("cntry"))).alias("cntry"),
             current_timestamp().alias("dwh_create_date")       # Add ETL load timestamp
-        )
+        ).dropDuplicates(["cid"])
 
         # Write transformed data to silver layer
         out.write.mode("overwrite").saveAsTable("silver.erp_loc_a101")

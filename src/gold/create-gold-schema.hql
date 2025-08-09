@@ -5,11 +5,11 @@ COMMENT 'Gold Schema - Dimensional Model';
 USE gold;
 
 -- =============================================================================
--- Create View: gold.dim_customers
+-- Create Table: gold.dim_customers
 -- =============================================================================
-DROP VIEW IF EXISTS gold.dim_customers;
+DROP TABLE IF EXISTS gold.dim_customers;
 
-CREATE VIEW gold.dim_customers AS
+CREATE TABLE gold.dim_customers AS
 SELECT
     ROW_NUMBER() OVER (ORDER BY ci.cst_id) AS customer_key, -- Surrogate key
     ci.cst_id                          AS customer_id,
@@ -31,11 +31,11 @@ LEFT JOIN silver.erp_loc_a101 la
     ON ci.cst_key = la.cid;
 
 -- =============================================================================
--- Create View: gold.dim_products
+-- Create Table: gold.dim_products
 -- =============================================================================
-DROP VIEW IF EXISTS gold.dim_products;
+DROP TABLE IF EXISTS gold.dim_products;
 
-CREATE VIEW gold.dim_products AS
+CREATE TABLE gold.dim_products AS
 SELECT
     ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt, pn.prd_key) AS product_key, -- Surrogate key
     pn.prd_id       AS product_id,
@@ -51,15 +51,14 @@ SELECT
     pn.prd_end_dt   AS end_date
 FROM silver.crm_prd_info pn
 LEFT JOIN silver.erp_px_cat_g1v2 pc
-    ON pn.cat_id = pc.id
-WHERE pn.prd_end_dt IS NULL;
+    ON pn.cat_id = pc.id;
 
 -- =============================================================================
--- Create View: gold.fact_sales
+-- Create Table: gold.fact_sales
 -- =============================================================================
-DROP VIEW IF EXISTS gold.fact_sales;
+DROP TABLE IF EXISTS gold.fact_sales;
 
-CREATE VIEW gold.fact_sales AS
+CREATE TABLE gold.fact_sales AS
 SELECT
     sd.sls_ord_num      AS order_number,
     pr.product_key      AS product_key,

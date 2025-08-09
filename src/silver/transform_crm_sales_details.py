@@ -24,8 +24,7 @@ def transform_crm_cust_info():
         batch_start_time = datetime.now()
 
         # Read data from the bronze layer table and filter for records updated in the last day
-        df = spark.table("bronze.crm_sales_details") \
-            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        df = spark.table("bronze.crm_sales_details")
         
         # Select and transform columns for the silver layer
         out = df.select(

@@ -24,8 +24,7 @@ def transform_crm_prd_info():
         batch_start_time = datetime.now()
 
         # Read data from bronze layer, filtering for records updated in the last day
-        df = spark.table("bronze.crm_prd_info") \
-            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        df = spark.table("bronze.crm_prd_info")
         
         # Define window specification for partitioning by product key and ordering by start date
         w = Window.partitionBy("prd_key").orderBy("prd_start_dt")
@@ -58,12 +57,13 @@ def transform_crm_prd_info():
             # Cast product start date to date type
             col("prd_start_dt").cast("date"),
 
-            # Calculate product end date as one day before the next start date in the window
-            (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
-            
+            # # Calculate product end date as one day before the next start date in the window
+            # (lead(col("prd_start_dt")).over(w) - expr("INTERVAL 1 DAY")).cast("date").alias("prd_end_dt"),
+            col("prd_end_dt").cast("date"),
             # Add ETL load timestamp
             current_timestamp().alias("dwh_create_date")
-            )
+            ).dropDuplicates(["prd_id"])
+        
         out.write.mode("overwrite").saveAsTable("silver.crm_prd_info")
 
         number_record = out.count()

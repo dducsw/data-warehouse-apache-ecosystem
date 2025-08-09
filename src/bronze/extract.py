@@ -52,8 +52,8 @@ def config_job_to_postgres(spark, job_name, source_schema, source_table, source_
       .mode("append") \
       .save()
 
-def extract(mode="full"):
-    print(f"== Starting PostgreSQL to Bronze Layer ({mode})... ==")
+def extract():
+    print(f"== Starting PostgreSQL to Bronze Layer ... ==")
     spark = None
     try:
         spark = SparkSession.builder \
@@ -92,6 +92,14 @@ def extract(mode="full"):
             job_name = f"extract_{src_table}_to_{tgt_table}"
             try:
                 # Log job config before extraction
+                df_exist = spark.table(tgt_table)
+                exist_count = df_exist.count()
+
+                if exist_count == 0:
+                    mode = "full"
+                else:
+                    mode = "increment"
+
                 config_job_to_postgres(
                     spark,
                     job_name=job_name,
@@ -155,5 +163,4 @@ def extract(mode="full"):
             spark.stop()
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 else "full"
-    extract(mode)
+    extract()

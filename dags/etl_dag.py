@@ -17,7 +17,7 @@ with DAG(
 
     extract_to_bronze = BashOperator(
         task_id="extract_from_db_to_bronze",
-        bash_command="sudo -u hiveuser /usr/local/spark/bin/spark-submit /home/ldduc/D/data-warehouse-apache-ecosystem/src/bronze/extract.py incremental"
+        bash_command="sudo -u hiveuser /usr/local/spark/bin/spark-submit /home/ldduc/D/data-warehouse-apache-ecosystem/src/bronze/extract.py"
     )
 
     transform_crm_cust_info = BashOperator(

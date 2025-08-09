@@ -24,8 +24,7 @@ def transform_crm_cust_info():
         batch_start_time = datetime.now()
 
         # Read source table from bronze layer and filter for records updated in the last day
-        df = spark.table("bronze.crm_cust_info") \
-            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        df = spark.table("bronze.crm_cust_info")
 
         # Define window to select the latest record per customer based on create date
         w = Window.partitionBy("cst_id").orderBy(desc("cst_create_date"))
@@ -48,7 +47,7 @@ def transform_crm_cust_info():
                 .otherwise("n/a").alias("cst_gndr"),
             col("cst_create_date").cast("date"),  # Cast create date to date type
             current_timestamp().alias("dwh_create_date")  # Add ETL load timestamp
-            )
+            ).dropDuplicates(["cst_id"])
 
         out.write.mode("overwrite").saveAsTable("silver.crm_cust_info")
         number_record = out.count()

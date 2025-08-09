@@ -24,14 +24,13 @@ def transform_crm_cust_info():
         batch_start_time = datetime.now()
 
         # Load data from bronze layer and filter records updated in the last 1 day
-        df = spark.table("bronze.erp_px_cat_g1v2") \
-            .filter(col("src_update_at") > (current_timestamp() - expr("INTERVAL 1 DAY")))
+        df = spark.table("bronze.erp_px_cat_g1v2")
         
         # Select required columns and add dwh_create_date
         out = df.select(
             col("id"), col("cat"), col("subcat"), col("maintenance"),
             current_timestamp().alias("dwh_create_date")
-        )
+        ).dropDuplicates(["id"])
         out.write.mode("overwrite").saveAsTable("silver.erp_px_cat_g1v2")
 
         number_record = out.count()
