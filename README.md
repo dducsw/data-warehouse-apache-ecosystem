@@ -74,6 +74,7 @@ data-warehouse-apache-ecosystem/
 │   │   └── source_db.sql         # PostgreSQL DDL for source tables
 │   ├── trino/
 │   │   ├── test.sql      # Trino queries to practice and test
+├── images/               # Images for README
 ├── README.md                     # Project documentation (to be created)
 ```
 
