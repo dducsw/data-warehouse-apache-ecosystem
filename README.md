@@ -216,4 +216,4 @@ It coordinates the extraction, transformation, and loading processes across the 
 
 ### **🛡️ License**
 
-This project is licensed under the [MIT License](https://github.com/DataWithBaraa/sql-data-warehouse-project/blob/main/LICENSE). You are free to use, modify, and share this project with proper attribution.
+You are free to use, modify, and share this project with proper attribution.
